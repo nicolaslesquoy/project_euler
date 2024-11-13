@@ -1,0 +1,449 @@
+        // Insert the nodes in the current node
+        //* NOTE: There is at least two nodes in the line.
+        // TODO: Add a specific check for that.
+        current->below_left = create_node(data[0]);
+        current->below_right = create_node(data[1]);
+
+Modified solve function
+int solve(tree *t) {
+    if (t == NULL || t->root == NULL) {
+        return 0;
+    }
+
+    // Create cache for memoization
+    cache *c = create_cache(1024); // Size can be adjusted based on tree size
+    
+    // Find maximum sum path
+    int result = max_sum_path_memo(t->root, c);
+    
+    // Clean up cache
+    free_cache(c);
+    
+    return result;
+}
+
+int max_sum_path(node *current) {
+    if (current == NULL) {
+        return 0;
+    }
+
+    // Recursively find the maximum sum path for the left and right subtrees
+    int left_sum = max_sum_path(current->below_left);
+    int right_sum = max_sum_path(current->below_right);
+
+    // Return the maximum sum path including the current node
+    return current->data + (left_sum > right_sum ? left_sum : right_sum);
+}
+
+int solve(tree *t) {
+    if (t == NULL || t->root == NULL) {
+        return 0;
+    }
+
+    // Find the maximum sum path starting from the root
+    return max_sum_path(t->root);
+}
+
+int solve(tree *t) {
+    // Find the path maximizing the sum of the nodes.
+    node* current = t->root;
+    int sum = current->data;
+    // We apply a greedy algorithm to find the path with the maximum sum.
+    while (current != NULL) {
+        if (current->below_left != NULL && current->below_right != NULL) {
+            if (current->below_left->data > current->below_right->data) {
+                sum += current->below_left->data;
+                current = current->below_left;
+            } else {
+                sum += current->below_right->data;
+                current = current->below_right;
+            }
+        } else if (current->below_left != NULL) {
+            sum += current->below_left->data;
+            current = current->below_left;
+        } else if (current->below_right != NULL) {
+            sum += current->below_right->data;
+            current = current->below_right;
+        } else {
+            break;
+        }
+    }
+    return sum;
+}
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <assert.h>
+#include <string.h>
+#include <limits.h>
+
+// Binary tree node
+typedef struct node {
+    int data;
+    struct node *left;
+    struct node *right;
+    struct node *below_left;
+    struct node *below_right;
+} node;
+
+typedef struct tree {
+    node *root;
+    int levels; // Number of levels in the tree
+} tree;
+
+tree *create_tree() {
+    tree *new_tree = (tree *)malloc(sizeof(tree));
+    assert(new_tree != NULL);
+    new_tree->root = NULL;
+    new_tree->levels = 0;
+    return new_tree;
+}
+
+node *create_node(int data, node *nleft, node *nright) {
+    node *new_node = (node *)malloc(sizeof(node));
+    assert(new_node != NULL);
+    new_node->data = data;
+    new_node->left = NULL;
+    new_node->right = NULL;
+    new_node->below_left = NULL;
+    new_node->below_right = NULL;
+    return new_node;
+}
+
+int countlines(FILE *fp) {
+    int count = 0;
+    char c;
+    while ((c = fgetc(fp)) != EOF) {
+        if (c == '\n') {
+            count++;
+        }
+    }
+    return count;
+}
+
+int* parseline(char *line, int size) {
+    int *data = (int *)malloc(size * sizeof(int));
+    assert(data != NULL);
+    int i = 0;
+    char *token = strtok(line, " ");
+    while (token != NULL && i < size) {
+        data[i] = atoi(token);
+        token = strtok(NULL, " ");
+        i++;
+    }
+    return data;
+}
+
+void insert_from_file(tree *t, FILE *file) {
+    int nb_levels = countlines(file);
+    rewind(file); // Reset the file pointer to the beginning
+    char line[256];
+    // Read the first line and create the root
+    if (fgets(line, sizeof(line), file) != NULL) {
+        // Remove newline character if present
+        line[strcspn(line, "\n")] = 0;
+        int *data = parseline(line, 1);
+        t->root = create_node(data[0], NULL, NULL);
+        t->levels++;
+        // Check if the root was created successfully
+        assert(t->root != NULL);
+        free(data);
+    } else {
+        fprintf(stderr, "Error reading the first line\n");
+        return;
+    }
+    // Define a current node
+    node *current = t->root;
+    // Read the rest of the file and insert the nodes line by line
+    while (fgets(line, sizeof(line), file) && t->levels <= nb_levels) {
+        // Remove newline character if present
+        line[strcspn(line, "\n")] = 0;
+        // Parse the line
+        int *data = parseline(line, t->levels + 1);
+        // Initialize the first node.
+        node *nfirst = create_node(data[0], NULL, NULL);
+        // Array to store the nodes in the new level.
+        node *nodes[t->levels + 1];
+        nodes[0] = nfirst;
+        // Create all the nodes in the current and link them to each other with right and left.
+        for (int i = 1; i < t->levels + 1; i++) {
+            node *nnew = create_node(data[i], nodes[i - 1], NULL);
+            nnew->left = nodes[i - 1];
+            nodes[i - 1]->right = nnew;
+            nodes[i] = nnew;
+        }
+        // Now, we iterate of the neighbours of the current node to insert the nodes of the new level.
+        int counter = 0;
+        while (current != NULL) {
+            current->below_left = nodes[counter];
+            current->below_right = nodes[counter + 1];
+            current = current->right;
+            counter++;
+        }
+        // Set current to the first node of the new level.
+        current = nfirst;
+
+        // Free the allocated memory for data
+        free(data);
+
+        t->levels++;
+    }
+}
+
+void print_tree(tree *t) {
+    if (t == NULL || t->root == NULL) {
+        printf("Tree is empty.\n");
+        return;
+    }
+
+    node *current = t->root;
+    printf("Root: %d\n", current->data);
+    current = current->below_left;
+
+    while (current != NULL) {
+        printf("Current node: %d\n", current->data);
+
+        if (current->left != NULL) {
+            printf("\tLeft: %d\n", current->left->data);
+        } else {
+            printf("\tLeft: NULL\n");
+        }
+
+        if (current->right != NULL) {
+            printf("\tRight: %d\n", current->right->data);
+        } else {
+            printf("\tRight: NULL\n");
+        }
+
+        if (current->below_left != NULL) {
+            printf("\tBelow left: %d\n", current->below_left->data);
+        } else {
+            printf("\tBelow left: NULL\n");
+        }
+
+        if (current->below_right != NULL) {
+            printf("\tBelow right: %d\n", current->below_right->data);
+        } else {
+            printf("\tBelow right: NULL\n");
+        }
+
+        if (current->right == NULL) {
+            while (current->left != NULL) {
+                current = current->left;
+            }
+            current = current->below_left;
+        } else {
+            current = current->right;
+        }
+    }
+}
+
+void delete_tree(tree *t) {
+    assert(t != NULL);
+    if (t->root == NULL) {
+        free(t);
+        return;
+    }
+
+    node *current = t->root;
+    node *next_level = current->below_left;
+
+    while (current != NULL) {
+        node *temp = current;
+        while (temp != NULL) {
+            node *next = temp->right;
+            free(temp);
+            temp = next;
+        }
+        current = next_level;
+        if (current != NULL) {
+            next_level = current->below_left;
+        }
+    }
+
+    free(t);
+}
+
+void print_tree_like_file(tree *t) {
+    if (t == NULL || t->root == NULL) {
+        printf("Tree is empty.\n");
+        return;
+    }
+
+    node *current = t->root;
+    printf("%d\n", current->data);
+    current = current->below_left;
+
+    while (current != NULL) {
+        printf("%d", current->data);
+
+        while (current->right != NULL) {
+            printf(" %d", current->right->data);
+            current = current->right;
+        }
+
+        printf("\n");
+
+        if (current->below_left != NULL) {
+            current = current->below_left;
+        } else {
+            current = current->below_right;
+        }
+    }
+}
+
+// Hash table entry to store computed results
+typedef struct cache_entry {
+    node *key;
+    int value;
+    struct cache_entry *next;
+} cache_entry;
+
+// Hash table for memoization
+typedef struct cache {
+    cache_entry **entries;
+    size_t size;
+} cache;
+
+// Create a new cache
+cache* create_cache(size_t size) {
+    cache *c = malloc(sizeof(cache));
+    c->entries = calloc(size, sizeof(cache_entry*));
+    c->size = size;
+    return c;
+}
+
+// Improved hash function
+size_t hash_node(node *n, size_t size) {
+    size_t hash = (size_t)n;
+    hash = ((hash >> 16) ^ hash) * 0x45d9f3b;
+    hash = ((hash >> 16) ^ hash) * 0x45d9f3b;
+    hash = (hash >> 16) ^ hash;
+    return hash % size;
+}
+
+// Store result in cache
+void cache_put(cache *c, node *key, int value) {
+    size_t index = hash_node(key, c->size);
+    cache_entry *entry = malloc(sizeof(cache_entry));
+    entry->key = key;
+    entry->value = value;
+    entry->next = c->entries[index];
+    c->entries[index] = entry;
+}
+
+// Get result from cache
+int cache_get(cache *c, node *key, int *found) {
+    size_t index = hash_node(key, c->size);
+    cache_entry *entry = c->entries[index];
+    while (entry != NULL) {
+        if (entry->key == key) {
+            *found = 1;
+            return entry->value;
+        }
+        entry = entry->next;
+    }
+    *found = 0;
+    return 0;
+}
+
+// Free cache memory
+void free_cache(cache *c) {
+    for (size_t i = 0; i < c->size; i++) {
+        cache_entry *entry = c->entries[i];
+        while (entry != NULL) {
+            cache_entry *next = entry->next;
+            free(entry);
+            entry = next;
+        }
+    }
+    free(c->entries);
+    free(c);
+}
+
+// Add debug printing to track path computation
+int max_sum_path_memo(node *current, cache *c) {
+    if (current == NULL) {
+        return 0;
+    }
+
+    // Check if result is in cache
+    int found;
+    int cached_result = cache_get(c, current, &found);
+    if (found) {
+        return cached_result;
+    }
+
+    // Recursively find the maximum sum path
+    int left_sum = max_sum_path_memo(current->below_left, c);
+    int right_sum = max_sum_path_memo(current->below_right, c);
+    
+    // Use long long to prevent overflow
+    long long result = (long long)current->data;
+    if (left_sum > right_sum) {
+        result += left_sum;
+    } else {
+        result += right_sum;
+    }
+
+    // Check for overflow
+    if (result > INT_MAX) {
+        fprintf(stderr, "Warning: Integer overflow detected\n");
+        result = INT_MAX;
+    }
+
+    #ifdef DEBUG
+    printf("Node: %d, Left: %d, Right: %d, Result: %lld\n", 
+           current->data, left_sum, right_sum, result);
+    #endif
+
+    cache_put(c, current, (int)result);
+    return (int)result;
+}
+
+// Get optimal cache size based on tree levels
+size_t get_cache_size(int levels) {
+    // Calculate approximate number of nodes in the tree
+    size_t num_nodes = (1 << (levels + 1)) - 1;
+    // Use next power of 2 for better hash distribution
+    size_t size = 1;
+    while (size < num_nodes) {
+        size <<= 1;
+    }
+    return size;
+}
+
+int solve(tree *t) {
+    if (t == NULL || t->root == NULL) {
+        return 0;
+    }
+
+    // Create cache with size based on tree levels
+    size_t cache_size = get_cache_size(t->levels);
+    cache *c = create_cache(cache_size);
+    if (c == NULL) {
+        fprintf(stderr, "Failed to create cache\n");
+        return 0;
+    }
+
+    // Find maximum sum path
+    int result = max_sum_path_memo(t->root, c);
+    
+    // Clean up cache
+    free_cache(c);
+    
+    return result;
+}
+
+int main(void) {
+    // Test insert_from_file
+    FILE *file = fopen("data/case_2.txt", "r");
+    assert(file != NULL);
+    tree *t = create_tree();
+    insert_from_file(t, file);
+    print_tree_like_file(t);
+    printf("Max sum: %d\n", solve(t));
+    delete_tree(t);
+    fclose(file);
+    return 0;
+}
